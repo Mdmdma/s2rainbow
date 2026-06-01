@@ -1,0 +1,534 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Sentinel-2 Pushbroom Ghost Simulator</title>
+<style>
+  :root {
+    --bg-primary: #ffffff;
+    --bg-secondary: #f4f3ee;
+    --bg-tertiary: #ebeae3;
+    --bg-info: #e6f1fb;
+    --bg-warning: #faeeda;
+    --bg-success: #eaf3de;
+    --text-primary: #1a1a1a;
+    --text-secondary: #5f5e5a;
+    --text-tertiary: #888780;
+    --text-info: #185fa5;
+    --text-warning: #854f0b;
+    --text-success: #3b6d11;
+    --border-tertiary: rgba(0,0,0,0.12);
+    --border-secondary: rgba(0,0,0,0.25);
+    --border-info: #378add;
+    --radius-md: 8px;
+    --radius-lg: 12px;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg-primary: #1c1c1a;
+      --bg-secondary: #25241f;
+      --bg-tertiary: #1a1a18;
+      --bg-info: #0c447c;
+      --bg-warning: #633806;
+      --bg-success: #27500a;
+      --text-primary: #f1efe8;
+      --text-secondary: #b4b2a9;
+      --text-tertiary: #888780;
+      --text-info: #b5d4f4;
+      --text-warning: #fac775;
+      --text-success: #c0dd97;
+      --border-tertiary: rgba(255,255,255,0.12);
+      --border-secondary: rgba(255,255,255,0.25);
+      --border-info: #378add;
+    }
+  }
+  * { box-sizing: border-box; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    background: var(--bg-tertiary);
+    color: var(--text-primary);
+    margin: 0;
+    padding: 24px 16px;
+    line-height: 1.5;
+  }
+  .container {
+    max-width: 1100px;
+    margin: 0 auto;
+  }
+  header {
+    margin-bottom: 24px;
+  }
+  h1 {
+    font-size: 22px;
+    font-weight: 500;
+    margin: 0 0 6px;
+  }
+  header p {
+    color: var(--text-secondary);
+    font-size: 14px;
+    margin: 0;
+  }
+  .panel {
+    background: var(--bg-primary);
+    border: 0.5px solid var(--border-tertiary);
+    border-radius: var(--radius-lg);
+    padding: 20px 24px;
+  }
+  .grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 28px;
+    align-items: start;
+  }
+  @media (max-width: 760px) {
+    .grid { grid-template-columns: 1fr; }
+  }
+  .s2-row {
+    display: grid;
+    grid-template-columns: 170px 1fr 110px;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 10px;
+  }
+  @media (max-width: 480px) {
+    .s2-row { grid-template-columns: 1fr; }
+  }
+  .s2-row label {
+    font-size: 13px;
+    color: var(--text-secondary);
+  }
+  .s2-row .val {
+    font-size: 13px;
+    font-weight: 500;
+    text-align: right;
+    font-variant-numeric: tabular-nums;
+  }
+  .s2-row.linked label { color: var(--text-info); }
+  .s2-section-title {
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--text-secondary);
+    margin: 14px 0 8px;
+  }
+  input[type="range"] {
+    width: 100%;
+    height: 4px;
+    -webkit-appearance: none;
+    appearance: none;
+    background: var(--border-tertiary);
+    border-radius: 2px;
+    outline: none;
+  }
+  input[type="range"]::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 18px;
+    height: 18px;
+    border-radius: 50%;
+    background: var(--text-primary);
+    cursor: pointer;
+    border: none;
+  }
+  input[type="range"]::-moz-range-thumb {
+    width: 18px;
+    height: 18px;
+    border-radius: 50%;
+    background: var(--text-primary);
+    cursor: pointer;
+    border: none;
+  }
+  .s2-stat-card {
+    background: var(--bg-secondary);
+    border-radius: var(--radius-md);
+    padding: 10px 12px;
+  }
+  .s2-stat-card .lbl {
+    font-size: 12px;
+    color: var(--text-secondary);
+    margin-bottom: 2px;
+  }
+  .s2-stat-card .num {
+    font-size: 18px;
+    font-weight: 500;
+    font-variant-numeric: tabular-nums;
+  }
+  .s2-dir {
+    display: flex;
+    gap: 6px;
+    margin-bottom: 6px;
+  }
+  .s2-dir button {
+    flex: 1;
+    font-size: 12px;
+    padding: 6px 8px;
+    background: transparent;
+    color: var(--text-primary);
+    border: 0.5px solid var(--border-secondary);
+    border-radius: var(--radius-md);
+    cursor: pointer;
+    font-family: inherit;
+  }
+  .s2-dir button:hover { background: var(--bg-secondary); }
+  .s2-dir button.active {
+    background: var(--bg-info);
+    color: var(--text-info);
+    border-color: var(--border-info);
+  }
+  .s2-note {
+    font-size: 11px;
+    color: var(--text-tertiary);
+    margin: -4px 0 8px 0;
+  }
+  .stats-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+    margin-bottom: 14px;
+  }
+  .canvas-frame {
+    background: #0a0a0a;
+    border-radius: var(--radius-md);
+    padding: 14px;
+    position: relative;
+  }
+  canvas {
+    width: 100%;
+    display: block;
+    border-radius: 4px;
+  }
+  .canvas-caption {
+    font-size: 11px;
+    color: var(--text-tertiary);
+    margin-top: 8px;
+    text-align: center;
+  }
+  .verdict {
+    margin-top: 12px;
+    padding: 10px 12px;
+    background: var(--bg-secondary);
+    border-radius: var(--radius-md);
+    font-size: 12px;
+    line-height: 1.5;
+  }
+  footer {
+    margin-top: 24px;
+    font-size: 12px;
+    color: var(--text-tertiary);
+    text-align: center;
+  }
+  footer a { color: var(--text-secondary); }
+</style>
+</head>
+<body>
+<div class="container">
+
+<header>
+  <h1>Sentinel-2 pushbroom ghost simulator</h1>
+  <p>Tune the sensor and object parameters to reproduce multi-color streak artifacts from pushbroom satellite imagery.</p>
+</header>
+
+<div class="panel">
+<div class="grid">
+
+  <div>
+    <div class="s2-section-title">Sensor timing (primary input)</div>
+
+    <div class="s2-row">
+      <label>Readout delay between bands</label>
+      <input type="range" id="dt" min="0.1" max="20" step="0.1" value="4.5">
+      <span class="val"><span id="dt-v">4.5</span> ms</span>
+    </div>
+    <div class="s2-note">Time between when adjacent color bands image the same ground point.</div>
+
+    <div class="s2-row">
+      <label>Number of color bands</label>
+      <input type="range" id="nbands" min="2" max="6" step="1" value="3">
+      <span class="val"><span id="nbands-v">3</span></span>
+    </div>
+    <div class="s2-row">
+      <label>Ground sample distance</label>
+      <input type="range" id="gsd" min="5" max="60" step="1" value="10">
+      <span class="val"><span id="gsd-v">10</span> m</span>
+    </div>
+
+    <div class="s2-section-title">Object motion</div>
+
+    <div style="margin-bottom:10px">
+      <div style="font-size:13px;color:var(--text-secondary);margin-bottom:6px">Motion direction</div>
+      <div class="s2-dir">
+        <button id="dir-along" class="active">Along track</button>
+        <button id="dir-cross">Across track</button>
+        <button id="dir-angle">Custom angle</button>
+      </div>
+      <div class="s2-row" id="angle-row" style="display:none">
+        <label>Angle from track</label>
+        <input type="range" id="angle" min="0" max="180" step="1" value="45">
+        <span class="val"><span id="angle-v">45</span>&deg;</span>
+      </div>
+    </div>
+
+    <div class="s2-row linked">
+      <label>Object speed <span style="font-size:10px;opacity:0.7">(linked)</span></label>
+      <input type="range" id="vobj" min="0" max="8000" step="10" value="250">
+      <span class="val"><span id="vobj-v">250</span> m/s</span>
+    </div>
+    <div class="s2-row linked">
+      <label>Ghost spacing <span style="font-size:10px;opacity:0.7">(linked)</span></label>
+      <input type="range" id="spacing" min="0" max="120" step="0.5" value="1.13">
+      <span class="val"><span id="spacing-v">1.13</span> m</span>
+    </div>
+    <div class="s2-note">Move either one. The other updates automatically.</div>
+
+    <div class="s2-row">
+      <label>Streak width</label>
+      <input type="range" id="objsize" min="2" max="40" step="1" value="10">
+      <span class="val"><span id="objsize-v">10</span> m</span>
+    </div>
+
+    <div class="s2-section-title">View</div>
+    <div class="s2-row">
+      <label>Scene rotation</label>
+      <input type="range" id="rotation" min="-180" max="180" step="1" value="0">
+      <span class="val"><span id="rotation-v">0</span>&deg;</span>
+    </div>
+    <div class="s2-note">Rotates the whole canvas to match the orientation of your reference image.</div>
+  </div>
+
+  <div>
+    <div class="s2-section-title">Derived</div>
+    <div class="stats-grid">
+      <div class="s2-stat-card"><div class="lbl">Readout delay</div><div class="num"><span id="dt-out">4.5</span> ms</div></div>
+      <div class="s2-stat-card"><div class="lbl">Ghost shift per band</div><div class="num"><span id="shift">1.13</span> m</div></div>
+      <div class="s2-stat-card"><div class="lbl">Shift in pixels</div><div class="num"><span id="pix">0.11</span> px</div></div>
+      <div class="s2-stat-card"><div class="lbl">Object speed</div><div class="num"><span id="v-out">250</span> m/s</div></div>
+    </div>
+
+    <div class="s2-section-title">Simulated detector view</div>
+    <div class="canvas-frame">
+      <canvas id="sim" width="320" height="320"></canvas>
+      <div class="canvas-caption">Compass shows local north (along-track) and across-track after rotation.</div>
+    </div>
+
+    <div id="verdict" class="verdict"></div>
+  </div>
+</div>
+</div>
+
+<footer>
+  Open source. The physics: ghost spacing = object speed &times; inter-band readout delay.
+</footer>
+
+</div>
+
+<script>
+(function(){
+  var BAND_COLORS = ['#ff3344','#33dd55','#3388ff','#ffaa00','#cc55ff','#00ddcc'];
+  var BAND_NAMES  = ['R','G','B','NIR','SWIR1','SWIR2'];
+
+  function $(id){ return document.getElementById(id); }
+
+  var independent = ['dt','nbands','gsd','angle','objsize','rotation'];
+  var dirState = 'along';
+  var lastEdited = 'vobj';
+  var suppressLink = false;
+
+  function getMotionAngle(){
+    if (dirState === 'along') return 0;
+    if (dirState === 'cross') return 90;
+    return +$('angle').value;
+  }
+
+  function recomputeLinked(){
+    var dt_s = (+$('dt').value) / 1000;
+    if (lastEdited === 'vobj'){
+      var v = +$('vobj').value;
+      var newSpacing = v * dt_s;
+      suppressLink = true;
+      $('spacing').value = Math.min(Math.max(newSpacing, 0), +$('spacing').max);
+      suppressLink = false;
+    } else {
+      var s = +$('spacing').value;
+      var newV = dt_s > 0 ? s / dt_s : 0;
+      suppressLink = true;
+      $('vobj').value = Math.min(Math.max(newV, 0), +$('vobj').max);
+      suppressLink = false;
+    }
+  }
+
+  independent.forEach(function(id){
+    $(id).addEventListener('input', function(){
+      if (id === 'dt') recomputeLinked();
+      update();
+    });
+  });
+
+  $('vobj').addEventListener('input', function(){
+    if (suppressLink) return;
+    lastEdited = 'vobj';
+    recomputeLinked();
+    update();
+  });
+  $('spacing').addEventListener('input', function(){
+    if (suppressLink) return;
+    lastEdited = 'spacing';
+    recomputeLinked();
+    update();
+  });
+
+  ['along','cross','angle'].forEach(function(k){
+    $('dir-'+k).onclick = function(){
+      dirState = k;
+      ['along','cross','angle'].forEach(function(j){
+        $('dir-'+j).classList.toggle('active', j === k);
+      });
+      $('angle-row').style.display = (k === 'angle') ? 'grid' : 'none';
+      update();
+    };
+  });
+
+  function update(){
+    var dt_ms = +$('dt').value;
+    var nbands = +$('nbands').value;
+    var gsd = +$('gsd').value;
+    var vobj = +$('vobj').value;
+    var spacing = +$('spacing').value;
+    var objsize = +$('objsize').value;
+    var motionAngle = +$('angle').value;
+    var rotation = +$('rotation').value;
+
+    $('dt-v').textContent = dt_ms.toFixed(1);
+    $('nbands-v').textContent = nbands;
+    $('gsd-v').textContent = gsd;
+    $('vobj-v').textContent = vobj.toFixed(0);
+    $('spacing-v').textContent = spacing.toFixed(2);
+    $('objsize-v').textContent = objsize;
+    $('angle-v').textContent = motionAngle;
+    $('rotation-v').textContent = rotation;
+
+    var theta = getMotionAngle();
+    var rad = theta * Math.PI / 180;
+
+    var shift_total = spacing;
+    var shift_along = shift_total * Math.cos(rad);
+    var shift_cross = shift_total * Math.sin(rad);
+
+    $('dt-out').textContent = dt_ms.toFixed(2);
+    $('shift').textContent = shift_total.toFixed(2);
+    $('pix').textContent = (shift_total / gsd).toFixed(2);
+    $('v-out').textContent = vobj.toFixed(0);
+
+    draw({nbands: nbands, gsd: gsd, objsize: objsize,
+          shift_along: shift_along, shift_cross: shift_cross,
+          rotation: rotation});
+    verdict({shift_total: shift_total, gsd: gsd, vobj: vobj});
+  }
+
+  function draw(p){
+    var c = $('sim');
+    var ctx = c.getContext('2d');
+    var W = c.width, H = c.height;
+    ctx.fillStyle = '#0a0a0a';
+    ctx.fillRect(0, 0, W, H);
+
+    var maxOffset = Math.max(
+      Math.abs(p.shift_along) * p.nbands,
+      Math.abs(p.shift_cross) * p.nbands
+    );
+    var totalSpan = Math.max(60, maxOffset * 2 + p.objsize * 4);
+    var pxPerM = Math.min(2.0, (W * 0.85) / totalSpan);
+    var cx = W / 2, cy = H / 2;
+    var rotRad = p.rotation * Math.PI / 180;
+
+    ctx.save();
+    ctx.translate(cx, cy);
+    ctx.rotate(rotRad);
+    ctx.translate(-cx, -cy);
+
+    ctx.strokeStyle = 'rgba(255,255,255,0.06)';
+    ctx.lineWidth = 1;
+    var gridM = p.gsd;
+    var gridReach = W;
+    for (var g = -gridReach; g <= gridReach; g += gridM){
+      var px = cx + g * pxPerM;
+      ctx.beginPath(); ctx.moveTo(px, -W); ctx.lineTo(px, H + W); ctx.stroke();
+      var py = cy + g * pxPerM;
+      ctx.beginPath(); ctx.moveTo(-W, py); ctx.lineTo(W + W, py); ctx.stroke();
+    }
+
+    var streakWidthPx = Math.max(2, p.objsize * pxPerM);
+
+    ctx.globalCompositeOperation = 'screen';
+    for (var i = 0; i < p.nbands; i++){
+      var dx = (p.shift_cross * i) * pxPerM;
+      var dy = -(p.shift_along * i) * pxPerM;
+
+      var x = cx + dx - streakWidthPx / 2;
+      var yBottom = cy + dy;
+      var reach = Math.max(W, H) * 1.5;
+      var yTop = yBottom - reach;
+      var height = yBottom - yTop;
+
+      ctx.fillStyle = BAND_COLORS[i];
+      ctx.fillRect(x, yTop, streakWidthPx, height);
+    }
+    ctx.globalCompositeOperation = 'source-over';
+
+    ctx.restore();
+
+    ctx.fillStyle = 'rgba(255,255,255,0.55)';
+    ctx.font = '10px sans-serif';
+    var compassX = 30, compassY = 30, arm = 16;
+    var ax = compassX + Math.sin(rotRad) * arm;
+    var ay = compassY - Math.cos(rotRad) * arm;
+    var bx = compassX + Math.cos(rotRad) * arm;
+    var by = compassY + Math.sin(rotRad) * arm;
+    ctx.strokeStyle = 'rgba(255,255,255,0.55)';
+    ctx.beginPath(); ctx.moveTo(compassX, compassY); ctx.lineTo(ax, ay); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(compassX, compassY); ctx.lineTo(bx, by); ctx.stroke();
+    ctx.fillText('N', ax - 3, ay - 3);
+    ctx.fillText('X', bx + 2, by + 10);
+
+    ctx.strokeStyle = 'rgba(255,255,255,0.5)';
+    ctx.fillStyle = 'rgba(255,255,255,0.85)';
+    var scaleM = Math.max(10, Math.round(50 / pxPerM / 10) * 10);
+    var scalePx = scaleM * pxPerM;
+    var sx = 14, sy = H - 14;
+    ctx.beginPath(); ctx.moveTo(sx, sy); ctx.lineTo(sx + scalePx, sy); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(sx, sy - 3); ctx.lineTo(sx, sy + 3); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(sx + scalePx, sy - 3); ctx.lineTo(sx + scalePx, sy + 3); ctx.stroke();
+    ctx.fillText(scaleM + ' m', sx, sy - 6);
+  }
+
+  function verdict(p){
+    var v = $('verdict');
+    var pix = p.shift_total / p.gsd;
+    var msg = '';
+    var color = 'var(--text-secondary)';
+
+    if (pix < 0.1){
+      msg = 'Shift is ' + (pix * 100).toFixed(0) + '% of a pixel. No visible artifact, just subtle color fringing.';
+    } else if (pix < 1){
+      msg = 'Sub-pixel shift (' + pix.toFixed(2) + ' px). Color fringing visible on streak edges, no separate copies.';
+      color = 'var(--text-info)';
+    } else if (pix < 3){
+      msg = 'Shift is ' + pix.toFixed(1) + ' pixels. Color-separated streaks start to be distinguishable.';
+      color = 'var(--text-info)';
+    } else if (pix < 10){
+      msg = 'Clear color separation: ' + pix.toFixed(1) + ' pixels (' + p.shift_total.toFixed(1) + ' m) between bands. Classic RGB rainbow streak.';
+      color = 'var(--text-success)';
+    } else {
+      msg = 'Extreme separation: ' + pix.toFixed(0) + ' pixels (' + p.shift_total.toFixed(0) + ' m). Streaks well separated.';
+      color = 'var(--text-warning)';
+    }
+    v.style.color = color;
+    v.textContent = msg;
+  }
+
+  recomputeLinked();
+  update();
+})();
+</script>
+
+</body>
+</html>
